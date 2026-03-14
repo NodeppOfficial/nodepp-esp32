@@ -1,59 +1,59 @@
+/*
+ * Copyright 2023 The Nodepp Project Authors. All Rights Reserved.
+ *
+ * Licensed under the MIT (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+ * https://github.com/NodeppOfficial/nodepp/blob/main/LICENSE
+ */
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
 #ifndef NODEPP_EXPECTED
 #define NODEPP_EXPECTED
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+#include "any.h"
+
+/*────────────────────────────────────────────────────────────────────────────*/
 
 namespace nodepp {
 template <typename T, typename E> struct expected_t { 
 protected:
 
-    bool hasValue; union {
-       T data; E err;
-    };
+    struct NODE { any_t data; bool has; }; ptr_t<NODE> obj;
 
 public:
 
-    expected_t( const T& val ) : hasValue(true) , data(val) {}
-
-    expected_t( const E& err ) : hasValue(false), err(err) {}
-
-    /*─······································································─*/
-
-    bool has_value() const { return hasValue; }
+    expected_t( const T& val ) noexcept : obj( new NODE() ) { obj->has = true ; obj->data = val; }
+    expected_t( const E& err ) noexcept : obj( new NODE() ) { obj->has = false; obj->data = err; }
 
     /*─······································································─*/
 
-    T& value() {
-        if ( !hasValue ) {
-            process::error("expected does not have a value");
-        }   return data;
-    }
+    explicit operator bool(void) const noexcept { return has_value(); }
+    bool has_value() /*-------*/ const noexcept { return obj->has; }
 
-    const T& value() const {
-        if ( !hasValue ) {
-            process::error("expected does not have a value");
-        }   return data;
+    /*─······································································─*/
+
+    T value() const { 
+        if( !has_value() || !obj->data.has_value() )
+          { ARDUINO_ERROR("expected does not have a value"); }
+        return obj->data.template as<T>(); 
     }
 
     /*─······································································─*/
 
-    E& error() {
-        if ( hasValue ) {
-            process::error("expected does not have an error");
-        }   return err;
-    }
-
-    const E& error() const {
-        if ( hasValue ) {
-            process::error("expected does not have an error");
-        }   return err;
-    }
-
-    /*─······································································─*/
-
-    virtual ~expected_t() {
-        if( hasValue ){ data.~T(); } 
-        else          { err .~E(); }
+    E error() const { 
+        if( has_value() || !obj->data.has_value() )
+          { ARDUINO_ERROR("expected does not have a value"); }
+        return obj->data.template as<E>(); 
     }
 
 };}
 
+/*────────────────────────────────────────────────────────────────────────────*/
+
 #endif
+
+/*────────────────────────────────────────────────────────────────────────────*/

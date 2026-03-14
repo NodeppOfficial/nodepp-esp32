@@ -1,68 +1,51 @@
-#ifndef NODEPP_TIMER
-#define NODEPP_TIMER
+/*
+ * Copyright 2023 The Nodepp Project Authors. All Rights Reserved.
+ *
+ * Licensed under the MIT (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+ * https://github.com/NodeppOfficial/nodepp/blob/main/LICENSE
+ */
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-#include "generator.h"
+#ifndef NODEPP_TIMER
+#define NODEPP_TIMER
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace nodepp { namespace timer {
     
     template< class V, class... T >
-    ptr_t<ulong> add ( V func, ulong* time, const T&... args ){
-        ptr_t<ulong> out = new ulong( process::millis() + *time ); 
-        auto         prs = _timer_::timer();
-        process::task::add( prs, func, out, time, args... ); 
-        return out;
-    };
+    ptr_t<task_t> add ( const V& cb, ulong time, const T&... args ){
+        return process::add( coroutine::add( COROUTINE(){
+        coBegin coDelay( time ); 
+            
+            if( cb(args...)<0 ){ coEnd; } 
+
+        coGoto(0); coFinish
+    })); }
     
     template< class V, class... T >
-    ptr_t<ulong> add ( V func, ulong time, const T&... args ){
-        ptr_t<ulong> out = new ulong( process::millis() + time ); 
-        auto         prs = _timer_::timer();
-        process::task::add( prs, func, out, time, args... ); 
-        return out;
-    };
+    ptr_t<task_t> timeout ( const V& cb, ulong time, const T&... args ){
+        auto clb = type::bind( cb );
+        return process::add( coroutine::add( COROUTINE(){
+        coBegin coDelay( time ); cb(args...);
+        coFinish
+    })); }
+    
+    template< class V, class... T >
+    ptr_t<task_t> interval ( const V& cb, ulong time, const T&... args ){
+        auto clb = type::bind( cb );
+        return process::add( coroutine::add( COROUTINE(){
+        coBegin coDelay( time ); cb(args...);
+        coGoto(0); coFinish
+    })); }
     
     /*─······································································─*/
 
-    template< class V, class... T >
-    ptr_t<ulong> timeout ( V func, ulong* time, const T&... args ){
-        return timer::add([=]( T... args ){ func(args...); return -1; }, time, args... );
-    };
-
-    template< class V, class... T >
-    ptr_t<ulong> timeout ( V func, ulong time, const T&... args ){
-        return timer::add([=]( T... args ){ func(args...); return -1; }, time, args... );
-    };
+    inline void clear( ptr_t<task_t> address ){ process::clear( address ); }
     
-    /*─······································································─*/
-
-    template< class V, class... T >
-    ptr_t<ulong> interval ( V func, ulong* time, const T&... args ){
-        return timer::add([=]( T... args ){ func(args...); return 1; }, time, args... );
-    };
-
-    template< class V, class... T >
-    ptr_t<ulong> interval( V func, ulong time, const T&... args ){
-        return timer::add([=]( T... args ){ func(args...); return 1; }, time, args... );
-    };
-    
-    /*─······································································─*/
-    
-    void delay( ulong* time ){
-        ulong stamp = process::millis() + *time;
-        while( process::millis() < stamp )
-             { process::next(); }
-    };
-
-    void delay( ulong time ){ delay( (ulong*) &time ); }
-    
-    /*─······································································─*/
-
-    void clear( const ptr_t<ulong>& address ){ if( !address ) *address = 0; }
-
 }}
 
 /*────────────────────────────────────────────────────────────────────────────*/
@@ -70,59 +53,36 @@ namespace nodepp { namespace timer {
 namespace nodepp { namespace utimer {
     
     template< class V, class... T >
-    ptr_t<ulong> add ( V func, ulong* time, const T&... args ){
-        ptr_t<ulong> out = new ulong( process::micros() + *time );  
-        auto         prs = _timer_::utimer();
-        process::task::add( prs, func, out, args... ); 
-        return out;
-    };
+    ptr_t<task_t> add ( const V& cb, ulong time, const T&... args ){
+        auto clb = type::bind( cb );
+        return process::add( coroutine::add( COROUTINE(){
+        coBegin coUDelay( time ); 
+            
+            if( cb(args...)<0 ){ coEnd; } 
+
+        coGoto(0); coFinish
+    })); }
     
     template< class V, class... T >
-    ptr_t<ulong> add ( V func, ulong time, const T&... args ){
-        ptr_t<ulong> out = new ulong( process::micros() + time );  
-        auto         prs = _timer_::utimer();
-        process::task::add( prs, func, out, args... ); 
-        return out;
-    };
+    ptr_t<task_t> timeout ( const V& cb, ulong time, const T&... args ){
+        auto clb = type::bind( cb );
+        return process::add( coroutine::add( COROUTINE(){
+        coBegin coUDelay( time ); cb(args...);
+        coFinish
+    })); }
+    
+    template< class V, class... T >
+    ptr_t<task_t> interval ( const V& cb, ulong time, const T&... args ){
+        auto clb = type::bind( cb );
+        return process::add( coroutine::add( COROUTINE(){
+        coBegin coUDelay( time ); cb(args...);
+        coGoto(0); coFinish
+    })); }
     
     /*─······································································─*/
 
-    template< class V, class... T >
-    ptr_t<ulong> timeout ( V func, ulong* time, const T&... args ){
-        return utimer::add([=]( T... args ){ func(args...); return -1; }, time, args... );
-    };
-
-    template< class V, class... T >
-    ptr_t<ulong> timeout ( V func, ulong time, const T&... args ){
-        return utimer::add([=]( T... args ){ func(args...); return -1; }, time, args... );
-    };
+    inline void clear( ptr_t<task_t> address ){ process::clear( address ); }
     
-    /*─······································································─*/
-
-    template< class V, class... T >
-    ptr_t<ulong> interval ( V func, ulong* time, const T&... args ){
-        return utimer::add([=]( T... args ){ func(args...); return 1; }, time, args... );
-    };
-
-    template< class V, class... T >
-    ptr_t<ulong> interval( V func, ulong time, const T&... args ){
-        return utimer::add([=]( T... args ){ func(args...); return 1; }, time, args... );
-    };
-    
-    /*─······································································─*/
-    
-    void delay( ulong* time ){
-        ulong stamp = process::micros() + *time;
-        while( process::micros() < stamp )
-             { process::next(); }
-    };
-
-    void delay( ulong time ){ delay( (ulong*) &time ); }
-    
-    /*─······································································─*/
-
-    void clear( const ptr_t<ulong>& address ){ if( !address ) *address = 0; }
-
 }}
 
 /*────────────────────────────────────────────────────────────────────────────*/

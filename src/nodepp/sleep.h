@@ -1,10 +1,21 @@
-#ifndef NODEPP_SLEEP
-#define NODEPP_SLEEP
+/*
+ * Copyright 2023 The Nodepp Project Authors. All Rights Reserved.
+ *
+ * Licensed under the MIT (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+ * https://github.com/NodeppOfficial/nodepp/blob/main/LICENSE
+ */
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-#if _KERNEL == NODEPP_KERNEL_ARDUINO
-    #include "arduino/sleep.cpp"
+#ifndef NODEPP_sleep
+#define NODEPP_sleep
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+#if   _KERNEL_ == NODEPP_KERNEL_ARDUINO
+    #include "arduino/sleep.h"
 #else
     #error "This OS Does not support sleep.h"
 #endif
