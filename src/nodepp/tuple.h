@@ -1,3 +1,14 @@
+/*
+ * Copyright 2023 The Nodepp Project Authors. All Rights Reserved.
+ *
+ * Licensed under the MIT (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+ * https://github.com/NodeppOfficial/nodepp/blob/main/LICENSE
+ */
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
 #ifndef NODEPP_TUPLE
 #define NODEPP_TUPLE
 
@@ -11,7 +22,7 @@ template <typename... Types> class tuple_t {};
 
 template <typename Head, typename... Tail>
 class tuple_t<Head, Tail...> : public tuple_t<Tail...> {
-public: tuple_t() noexcept {} 
+public: tuple_t() noexcept {} virtual ~tuple_t() noexcept {}
     tuple_t( const Head& head, const Tail&... tail ) noexcept : tuple_t<Tail...>(tail...), head_(new Head(head)) {}
     tuple_t<Tail...> tail() const noexcept { return *this; }
     Head& head() const noexcept { return *head_; }

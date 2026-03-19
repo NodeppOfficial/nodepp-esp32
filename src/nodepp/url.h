@@ -1,19 +1,26 @@
+/*
+ * Copyright 2023 The Nodepp Project Authors. All Rights Reserved.
+ *
+ * Licensed under the MIT (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+ * https://github.com/NodeppOfficial/nodepp/blob/main/LICENSE
+ */
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
 #ifndef NODEPP_URL
 #define NODEPP_URL
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-#include "query.h"
+#include "encoder.h"
 #include "regex.h"
+#include "map.h"
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace nodepp {
-
-/*────────────────────────────────────────────────────────────────────────────*/
-
-ptr_t<string_t> prot ({ "https", "http", "wss", "ws", "ftp", "ftps", "tcp", "tls", "udp", "dtls" });
-ptr_t<int>      prts ({  443   ,  80   ,  443 ,  80 ,  21  ,  21   ,  80  ,  443 ,  80  ,  443   });
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
@@ -23,7 +30,6 @@ struct url_t {
     string_t pathname;
     string_t search;
     string_t origin;
-    query_t  query;
     string_t auth;
     string_t host;
     string_t hash;
@@ -38,13 +44,48 @@ struct url_t {
 
 namespace url {
 
-    bool is_valid( const string_t& URL ){
-        return regex::test( URL, "^\\w+://([^.]+)", "i" );
+/*────────────────────────────────────────────────────────────────────────────*/
+    
+    inline map_t<string_t,uint> protocols() {
+    return map_t<string_t,uint> ({
+         { "https", 443 }, { "wss" , 443 },
+         { "tls"  , 443 }, { "dtls", 443 },
+         { "http" ,  80 }, { "ws"  ,  80 },
+         { "tcp"  ,  80 }, { "udp" ,  80 },
+         { "ftp"  ,  21 }, { "ssh" ,  22 } 
+    }); }
+
+    inline bool is_valid( const string_t& URL ){
+        regex_t reg( "^\\w+://[^.]+", true );
+        return reg.test( URL );
+    }
+
+    /*.........................................................................*/
+
+    inline string_t normalize ( string_t msg ) { 
+        string_t res = msg; regex_t reg( "%[a-z0-9]{2}", true );
+        while( reg.test( res ) ){
+            auto data = reg.match( res );
+            auto hex  = encoder::hex::set( data.slice(1) );
+            auto y    = string_t( (char*)&hex,hex.size() );
+            res = regex::replace_all( res, data, y );
+        }   return res;
+    }
+
+    /*.........................................................................*/
+
+    inline string_t unnormalize ( string_t msg ) { 
+        string_t res = msg; regex_t reg( "[^a-z0-9%]", true );
+        while( reg.test( res ) ){
+            auto data = reg.match( res );
+            auto hex  = encoder::hex::get( data[0] );
+            res = regex::replace_all( res, data, "%"+hex );
+        }   return res;
     }
     
     /*─······································································─*/
 
-    string_t protocol( const string_t& URL ){ 
+    inline string_t protocol( const string_t& URL ){ 
         string_t null; regex_t _a("^[^:]+");
         if( !is_valid(URL) || !_a.test( URL ) ) 
           { return null; } null = _a.match( URL );
@@ -53,63 +94,60 @@ namespace url {
     
     /*─······································································─*/
 
-    string_t auth( const string_t& URL ){ string_t null; 
-        regex_t _a("//[^@/]+@"), _b("@"), _c("[@/]+"), _d(":");
+    inline string_t auth( const string_t& URL ){ 
+        string_t null; regex_t _a("//\\w+:\\w+@");
         if( !is_valid(URL) || !_a.test( URL ) ) 
           { return null; } null = _a.match( URL );
-        if( !_b.test( null ) ){ return ""; }
-        if( !_d.test( null ) ){ return ""; }
-        if( null.size() <= 4 ){ return ""; }
-            return _c.replace_all( null, "" );
+            return null.slice( 2, -1 );
     }
 
-    string_t user( const string_t& URL ){ string_t null; 
+    inline string_t user( const string_t& URL ){ string_t null; 
         auto data = string::split( auth( URL ), ':' );
         if( data.size() != 2 ){ return null; } return data[0];
     }
 
-    string_t pass( const string_t& URL ){ string_t null; 
+    inline string_t pass( const string_t& URL ){ string_t null; 
         auto data = string::split( auth( URL ), ':' );
         if( data.size() != 2 ){ return null; } return data[1];
     }
     
     /*─······································································─*/
 
-    string_t hash( const string_t& URL ){ 
+    inline string_t hash( const string_t& URL ){ 
         string_t null; regex_t _a("#[^?]*");
         if( !is_valid(URL) || !_a.test( URL ) ) 
           { return null; } return _a.match( URL );
     }
 
-    string_t search( const string_t& URL ){ 
+    inline string_t search( const string_t& URL ){ 
         string_t null; regex_t _a("\\?[^#]*");
         if( !is_valid(URL) || !_a.test( URL ) ) 
           { return null; } return _a.match( URL );
     }
-    string_t origin( const string_t& URL ){
+
+    inline string_t origin( const string_t& URL ){
         string_t null; regex_t _a("^[^/]+//[^/?#]+");
         if( !is_valid(URL) || !_a.test( URL ) )
           { return null; } return _a.match( URL );
     }
 
-    string_t path( const string_t& URL ){
-        string_t null; regex_t _a("/+[^?/#]+");
-        if( !is_valid(URL) || !_a.test(URL) ){ return ""; }
-	    auto vec = _a.match_all( URL );
-	if( vec.size() <= 1 ) return "/";
-	    vec.shift(); return vec.join("");
+    inline string_t path( const string_t& URL ){
+        string_t null; regex_t _a("/[^/?#]+");
+        if ( !is_valid(URL) || !_a.test(URL) ){ return "/"; }
+             null = _a.match_all( URL ).slice(1).join("");
+	         return null.empty() ? "/" : null;
     }
 
-    string_t host( const string_t& URL ){ string_t null; 
-        regex_t _a("/\\w[^/#?]+"), _c("/"), _d("[^@]+@|@");
-        if( !is_valid(URL) ){ return null; }
-            null = _a.match( URL );
-        if( _d.test( null ) )
-          { null = _d.replace_all( null, "" ); }
-            return _c.replace_all( null, "" );
+    inline string_t host( const string_t& URL ){ 
+        regex_t _a("[/@][^/#?]+");
+        if(!is_valid(URL) ){ return nullptr; }
+            auto data = _a.match( URL ).slice(1);
+        if( regex::test( data, "@" ) )
+             return regex::replace( data, "[^@]+@", "" );
+        else return data;
     }
 
-    string_t hostname( const string_t& URL ){ 
+    inline string_t hostname( const string_t& URL ){ 
         string_t null = host(URL); regex_t _a("[^:]+");
         if( !is_valid(URL) || !_a.test( null ) ) 
           { return null; } return _a.match( null );
@@ -117,34 +155,32 @@ namespace url {
     
     /*─······································································─*/
 
-    int port( const string_t& URL ){ regex_t _a(":\\d+$"), _b("[^\\d]+");
-        string_t _host = host( URL ); string_t _prot = protocol( URL );
-        if( _a.test( _host ) ){
-            string_t _port = _a.match( _host );
-                   _port = _b.replace_all( _port, "" );
-                   return string::to_uint( _port );
-        } else {
-            for( ulong i=0; i<prot.size(); i++ ) {
-                regex_t _a(prot[i]); if( _a.test( _prot ) )
-                { return prts[i]; }
-            }
-        }   return 8000;
+    inline uint port( const string_t& URL ){ 
+
+        string_t _prot = protocol( URL );
+        auto     _list = protocols();
+        string_t _host = host( URL );
+
+        regex_t  _a(":\\d+$");
+
+        if( !_host.empty() && _a.test( _host ) ){
+            return string::to_uint( _a.match( _host ).slice(1) );
+        } elif( !_prot.empty() ) {
+            if( _list.has(_prot) ){ return _list[_prot]; }
+        }   
+        
+        return 8000;
     }
     
     /*─······································································─*/
 
-    query_t query( const string_t& URL ){ return query::parse( search(URL) ); }
-    
-    /*─······································································─*/
-
-    url_t parse( const string_t& URL ){ url_t data;
-	if( !is_valid( URL ) ) return data;
+    inline url_t parse( const string_t& URL ){
+	if( !is_valid( URL ) ){ return url_t(); } url_t data;
 
         data.hostname = hostname( URL );
         data.protocol = protocol( URL );
         data.search   = search( URL );
         data.origin   = origin( URL );
-	    data.query    = query( URL );
         data.pathname = path( URL );
         data.port     = port( URL );
         data.host     = host( URL );
@@ -155,32 +191,36 @@ namespace url {
         data.href     = URL;
 
         data.path = data.pathname + data.search;
-        return data; 
-    }
+
+    return data; }
     
     /*─······································································─*/
 
-    string_t format( url_t* URL=nullptr ){ string_t _url; 
+    inline string_t format( const url_t& obj ){ string_t _url; 
 
-        if( URL == nullptr ){ return _url; }
-
-        if( !URL->href.empty() ){ return URL->href; }
-
-        if( !URL->origin.empty() ){ _url += URL->origin; }
-        else { 
-            _url += URL->protocol + "//";
-            _url += URL->auth + "@";
-            _url += URL->host;
+        if( !obj.href.empty() ){
+            _url += obj.href;
+        } elif( !obj.origin.empty() ){ 
+            _url += obj.origin; 
+        } else { 
+            _url += obj.protocol + "//";
+            _url += obj.auth + "@";
+            _url += obj.host;
         }
 
-        if( !URL->path.empty() ){ _url += URL->path; }
-        else {
-            _url += URL->pathname; 
-            _url += URL->search;
-        } 
+        if( !obj.path.empty() ){ 
+            _url += obj.path; 
+        } else {
+            _url += obj.pathname; 
+        }
 
-        if( !URL->hash.empty() ){ _url += URL->hash; }
-        return _url;
+        if( !obj.search.empty() ){
+            _url += obj.search;
+        }
+
+        if( !obj.hash.empty() ){ _url += obj.hash; }
+
+        return is_valid(_url) ? _url : nullptr;
     }
 
 }
