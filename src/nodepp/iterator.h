@@ -1,7 +1,23 @@
-#ifndef NODEPP_ITERATOR
-#define NODEPP_ITERATOR
+/*
+ * Copyright 2023 The Nodepp Project Authors. All Rights Reserved.
+ *
+ * Licensed under the MIT (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+ * https://github.com/NodeppOfficial/nodepp/blob/main/LICENSE
+ */
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+#ifndef NODEPP_ITERATOR_VARADIC
+#define NODEPP_ITERATOR_VARADIC
+
+/*────────────────────────────────────────────────────────────────────────────*/
 
 namespace nodepp { namespace iterator {
+
+    template< class U >
+    void map( U func ){ }
 
     template< class U, class T >
     void map( U func, const T& argc ){ func( argc ); }
@@ -11,65 +27,79 @@ namespace nodepp { namespace iterator {
 
     /*─······································································─*/
 
-    template< class U, class T, class... V > 
-    long count( U func, const T& argc, const V&... args ){ ulong n = 0;
-	    iterator::map([&]( T argc ){ if( func(argc) ) n++; }, argc, args... ); return n;
-    }
+    template< class U > 
+    ulong count( U func ){ return 0; }
 
     template< class U, class T, class... V > 
-    T reduce( U func, const T& argc, const V&... args ){ T act = argc;
-	    iterator::map([&]( T argc ){ act = func( act, argc ); }, args... ); return act;
+    ulong count( U func, const T& argc, const V&... args ){ ulong n = 0;
+	      iterator::map([&]( T argc ){ if( func(argc) ){ ++n; }}, argc, args... ); return n;
     }
     
     /*─······································································─*/
 
     template< class U, class T, class... V > 
-    bool every( U func, const T& argc, const V&... args ){ ulong n = 0;
-	    iterator::map([&]( T argc ){ if( func(argc) ) n++; }, argc, args... ); 
-	    return ( n == (sizeof...(V)+1) );
+    T reduce( U func, const T& argc, const V&... args ){ T out = argc;
+	    iterator::map([&]( T argc ){ out = func( out, argc ); }, args... ); return out;
     }
+    
+    /*─······································································─*/
+
+    template< class T, class... V > 
+    T* get( int index, const V&... args ){ 
+        T* out = nullptr; int idx = index; 
+        iterator::map([&]( T& argc ){ 
+            if( idx -->= 0 ){ out = &argc; }
+        }, args... ); return out; 
+    }
+    
+    /*─······································································─*/
+
+    template< class U > 
+    bool every( U func ){ return false; }
+
+    template< class U, class T, class... V > 
+    bool every( U func, const T& argc, const V&... args ){ ulong n = 0;
+	     iterator::map([&]( T argc ){ if( func(argc) ){ ++n; }}, argc, args... ); 
+	     return ( n == (sizeof...(V)+1) );
+    }
+
+    /*─······································································─*/
+
+    template< class U > 
+    bool some( U func ){ return false; }
 
     template< class U, class T, class... V > 
     bool some( U func, const T& argc, const V&... args ){ ulong n = 0;
-	    iterator::map([&]( T argc ){ if( func(argc) ) n++; }, argc, args... ); 
-	    return ( n > 0 );
+	     iterator::map([&]( T argc ){ if( func(argc) ){ ++n; }}, argc, args... ); 
+	     return ( n > 0 );
     }
+
+    /*─······································································─*/
+
+    template< class U > 
+    bool none( U func ){ return false; }
 
     template< class U, class T, class... V > 
     bool none( U func, const T& argc, const V&... args ){ ulong n = 0;
-	    iterator::map([&]( T argc ){ if( func(argc) ) n++; }, argc, args... ); 
-	    return ( n == 0 );
+	     iterator::map([&]( T argc ){ if( func(argc) ){ ++n; }}, argc, args... ); 
+	     return ( n == 0 );
     }
-
-    /*─······································································─*/
-#ifndef ARDUINO
-    template< class T, class... V > 
-    T max( const T& argc, const V&... args ){ T n = argc;
-	    iterator::map([&]( T argc ){ if( argc > n ) n=argc; }, args... );
-        return n;
-    }
-
-    template< class T, class... V > 
-    T min( const T& argc, const V&... args ){ T n = argc;
-	    iterator::map([&]( T argc ){ if( argc < n ) n=argc; }, args... );
-        return n;
-    }
-#endif
-    /*─······································································─*/
-/*
-    template< class T, class... V >
-    string_t join( const string_t& c, const T& argc, const V&... args ){
-	    return string::join( c, argc, args... );
-    }
-*/
+    
 }}
+
+/*────────────────────────────────────────────────────────────────────────────*/
 
 #endif
 
 #if !defined(NODEPP_ITERATOR_STRING) && defined(NODEPP_STRING)
     #define  NODEPP_ITERATOR_STRING
 
+/*────────────────────────────────────────────────────────────────────────────*/
+
 namespace nodepp { namespace string {
+
+    template< class U >
+    void map( U func ){ }
 
     template< class U, class T >
     void map( U func, const T& argc ){ func( string::to_string(argc) ); }
@@ -79,61 +109,154 @@ namespace nodepp { namespace string {
 
     /*─······································································─*/
 
-    template< class U, class T, class... V > 
-    long count( U func, const T& argc, const V&... args ){ ulong n = 0;
-	    string::map([&]( T argc ){ if( func(argc) ) n++; }, argc, args... ); return n;
-    }
+    template< class U > 
+    ulong count( U func ){ return 0; }
 
     template< class U, class T, class... V > 
-    T reduce( U func, const T& argc, const V&... args ){ T act = argc;
-	    string::map([&]( T argc ){ act = func( act, argc ); }, args... ); return act;
+    ulong count( U func, const T& argc, const V&... args ){ ulong n = 0;
+	      string::map([&]( string_t argc ){ if( func(argc) ){ ++n; }}, argc, args... ); return n;
     }
     
     /*─······································································─*/
 
+    template< class... V > 
+    string_t get( int index, const V&... args ){ 
+        string_t out = nullptr; int idx=index; 
+        string::map([&]( string_t argc ){
+            if( idx -->= 0 ){ out = argc; }
+        }, args... ); return out; 
+    }
+    
+    /*─······································································─*/
+
+    template< class U > 
+    bool every( U func ){ return false; }
+
     template< class U, class T, class... V > 
     bool every( U func, const T& argc, const V&... args ){ ulong n = 0;
-	    string::map([&]( T argc ){ if( func(argc) ) n++; }, argc, args... ); 
-	    return ( n == (sizeof...(V)+1) );
+	     string::map([&]( T argc ){ if( func(argc) ){ ++n; }}, argc, args... ); 
+	     return ( n == (sizeof...(V)+1) );
     }
+
+    /*─······································································─*/
+
+    template< class U > 
+    bool some( U func ){ return false; }
 
     template< class U, class T, class... V > 
     bool some( U func, const T& argc, const V&... args ){ ulong n = 0;
-	    string::map([&]( T argc ){ if( func(argc) ) n++; }, argc, args... ); 
-	    return ( n > 0 );
+	     string::map([&]( T argc ){ if( func(argc) ){ ++n; }}, argc, args... ); 
+	     return ( n > 0 );
     }
+
+    /*─······································································─*/
+
+    template< class U > 
+    bool none( U func ){ return false; }
 
     template< class U, class T, class... V > 
     bool none( U func, const T& argc, const V&... args ){ ulong n = 0;
-	    string::map([&]( T argc ){ if( func(argc) ) n++; }, argc, args... ); 
-	    return ( n == 0 );
+	     string::map([&]( T argc ){ if( func(argc) ){ ++n; }}, argc, args... ); 
+	     return ( n == 0 );
     }
-
+    
     /*─······································································─*/
-#ifndef ARDUINO
-    template< class T, class... V > 
-    T max( const T& argc, const V&... args ){ T n = argc;
-	    string::map([&]( T argc ){ if( argc > n ) n=argc; }, args... );
-        return n;
-    }
 
-    template< class T, class... V > 
-    T min( const T& argc, const V&... args ){ T n = argc;
-	    string::map([&]( T argc ){ if( argc < n ) n=argc; }, args... );
-        return n;
-    }
-#endif
-    /*─······································································─*/
+    template< class T >
+    string_t join( const string_t& c ){ return nullptr; }
 
     template< class T, class... V >
-        string_t join( const string_t& c, const T& argc, const V&... args ){
-        array_t<string_t> list; string_t result; 
-            map([&]( string_t argc ){ list.push( argc ); }, argc, args... );
-                for( ulong x=0; x<list.size(); x++ ){
-                result += to_string(list[x]) + ((x==list.last()) ? "" : c);
-            }   return result;
-        }
+    string_t join( const string_t& c, const T& argc, const V&... args ){
+        queue_t<string_t> list;
+        map([&]( string_t argc ){ list.push( argc ); }, argc, args... );
+        return array_t<string_t>( list.data() ).join( c );
+    }
 
-    }}
+}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
 
 #endif
+
+#if !defined(NODEPP_ITERATOR_JOIN) && defined(NODEPP_STRING)
+    #define  NODEPP_ITERATOR_JOIN
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace nodepp { namespace string {
+
+    template< class T >
+    string_t join( const initializer_t<T>& raw, string_t c=", " ){ 
+        return array_t<T>( raw.data() ).join(c); 
+    }
+
+    template< class T >
+    string_t join( const queue_t<T>& raw, string_t c=", " ){ 
+        return array_t<T>( raw.data() ).join(c); 
+    }
+
+    template< class T >
+    string_t join( const array_t<T>& raw, string_t c=", " ){ 
+        return raw.join(c); 
+    }
+
+    template< class T >
+    string_t join( const ptr_t<T>& raw, string_t c=", " ){ 
+        return array_t<T>( raw ).join(c); 
+    }
+
+    /*─······································································─*/
+
+    inline array_t<string_t> split_view( string_t _str, ulong size ){ 
+        queue_t<string_t> out; 
+        
+        while( !_str.empty() ){
+            out.push( _str.slice_view( 0, size ) );
+            _str.ptr().slice( size, (ulong) -1 );
+        }
+
+        return out.data();
+    }
+
+    template< class T >
+    array_t<string_t> split_view( string_t _str, T pattern ){ 
+        queue_t<string_t> out; ulong offset=0; ptr_t<ulong> idx;
+        
+        while( (idx=_str.find( pattern, offset )) != nullptr ){
+            out.push( _str.slice_view( offset, idx[0] ) ); offset=idx[1];
+        }   out.push( _str.slice_view( offset ) );
+
+        return out.data();
+    }
+
+    /*─······································································─*/
+
+    inline array_t<string_t> split( string_t _str, ulong size ){ 
+        queue_t<string_t> out; 
+        
+        while( !_str.empty() ){
+            out.push( _str.slice( 0, size ) );
+            _str.ptr().slice( size, (ulong) -1 );
+        }
+
+        return out.data();
+    }
+
+    template< class T >
+    array_t<string_t> split( string_t _str, T pattern ){ 
+        queue_t<string_t> out; ulong offset=0; ptr_t<ulong> idx;
+        
+        while( (idx=_str.find( pattern, offset )) != nullptr ){
+            out.push( _str.slice( offset, idx[0] ) ); offset=idx[1];
+        }   out.push( _str.slice( offset ) );
+
+        return out.data();
+    }
+
+}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+#endif
+
+/*────────────────────────────────────────────────────────────────────────────*/

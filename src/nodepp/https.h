@@ -1,3 +1,14 @@
+/*
+ * Copyright 2023 The Nodepp Project Authors. All Rights Reserved.
+ *
+ * Licensed under the MIT (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+ * https://github.com/NodeppOfficial/nodepp/blob/main/LICENSE
+ */
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
 #ifndef NODEPP_HTTPS
 #define NODEPP_HTTPS
 
@@ -8,100 +19,213 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace nodepp { class https_t : public ssocket_t, public NODEPP_GENERATOR_BASE {
+namespace nodepp { class https_t : public ssocket_t, public generator_t {
 protected:
 
-    bool      has_header=0;
-    string_t  version;
-    
+    struct DONE { len_t size; uchar state; };
+    struct NODE {
+        generator::file::line  line ; DONE mode[2];
+        generator::http::read  read ;
+        generator::http::write write;
+    };  ptr_t<NODE> http;
+
+    enum FLAG : uchar {
+         HTTP_FLAG_UNKNOWN = 0b00000000,
+         HTTP_FLAG_CHUNKED = 0b00000001,
+         HTTP_FLAG_STREAM  = 0b00000010,
+    };
+
+    void set_http_mode( DONE& mode, header_t header ) const noexcept { 
+        mode.state = FLAG::HTTP_FLAG_UNKNOWN ; mode.size = 0UL;
+        if( !header.has( "Content-Length"    ) ){
+        if( !header.has( "Transfer-Encoding" ) ){ return; } else { 
+            
+            auto itm = header ["Transfer-Encoding"];
+            if ( itm.to_lower_case().find( "chunked" ).null() ){ 
+                     mode.state |= FLAG::HTTP_FLAG_UNKNOWN;
+            } else { mode.state |= FLAG::HTTP_FLAG_CHUNKED; }
+
+        }} else { 
+            mode.size  = string::to_u64( header["Content-Length"] );
+            mode.state|= FLAG::HTTP_FLAG_STREAM;
+        }
+    }
+
+    void set_recv_mode( header_t header ) const noexcept { 
+         set_http_mode( http->mode[0], header ); 
+    }
+
+    void set_send_mode( header_t header ) const noexcept { 
+         set_http_mode( http->mode[1], header ); 
+    }
+
 public:
 
+    uint      status = 200;
+    string_t  version;
     header_t  headers;
-    int       status;
-    query_t   query;
 
-    string_t  protocol;
     string_t  search;
     string_t  method;
-    string_t  path;
-    string_t  url;
+    string_t  path  ;
     
     /*─······································································─*/
 
     template< class... T > 
-    https_t( const T&... args ) noexcept : ssocket_t( args... ) {}
-    
-    /*─······································································─*/
-
-    void     set_version( const string_t& msg ) noexcept { version = msg; }
-
-    string_t get_version() const noexcept { return version; }
+    https_t( const T&... args ) noexcept : ssocket_t( args... ), http( new NODE() ) {}
 
     /*─······································································─*/
 
-    int read_header() noexcept {
-        static array_t<string_t> init; 
-        string_t base, line, a, b;
-        int idx;
-    gnStart
-
-        if( !is_available() )                              coEnd;
-        base = read_line(); protocol = "HTTPS";
-        if( !regex::test( base,"HTTP/\\d\\.\\d" ) )        coEnd; 
-        init = regex::match_all( base, "[^\\s\t\r\n ]+" ); coNext;
+    int read_header() noexcept { if( is_closed() ){ return -1; } 
         
-        if( !regex::test( init[1], "^\\d+" ) ) {
-            auto idx = init[1].index_of([]( char x ){ return x=='?'; });
-              
-            if( idx > 0 ){
-                path   = init[1].slice( 0,idx );
-                search = init[1].slice(   idx );
-                query  = query::parse (search);
-            } else {
-                path   = init[1];
+        thread_local static ptr_t<regex_t> reg({
+            regex_t( "[^ \r]+" ),
+            regex_t( "^[^?#]+" ),
+            regex_t( "?[^#]+"  )
+        });
+        
+    coBegin
+
+        set_recv_mode( nullptr ); if( is_server() ) { set_send_mode( nullptr ); }
+    
+        if( !is_available() ) /*--------------*/ { coEnd; } coWait( http->line( this )==1 ); 
+        if( http->line.state <= 0 ) /*--------*/ { coEnd; }
+        if( http->line.data.find("HTTP").null() ){ coEnd; }
+
+        do{ auto base=reg[0].match_all( http->line.data );
+        if( base.size() < 3 ){ return -1; }
+        if( !string::is_digit(base[1][0]) ){
+
+            version= base[2]; method =base[0]; 
+            search = reg [2].match( base[1] );
+            path   = reg [1].match( base[1] );
+
+        } else { version = base[0]; status = string::to_uint( base[1] ); }
+        } while(0); 
+
+        do{ coWait( http->line( this )==1 ); if( http->line.state>0 ) { 
+            auto x= http->line.data; auto y = x.find( ": " ); 
+        if( y.null() ){ break; }
+            headers[ x.slice( 0, y[0] ).to_capital_case() ] = x.slice( y[1], -1 );
+        } else { break; } } while(true);
+
+        http->read.borrow = type::move( get_borrow( ) ); 
+        set_recv_mode( headers ); /*-----*/ coStay(0);
+
+    coFinish }
+    
+    /*─······································································─*/
+
+    promise_t<string_t,except_t> read_body( ulong timeout=60000UL ) const noexcept {
+           auto self = type::bind( this );
+    return promise_t<string_t,except_t> ([=](
+           res_t<string_t> res, rej_t<except_t> rej
+    ){
+
+        auto time = process::now() + timeout;
+        auto body = ptr_t<string_t>( 0UL );
+
+        process::add([=](){ 
+            
+            if( process::now() > time ){ rej( except_t( "timeout reached" ) ); return -1; }
+
+            if( self->http->mode[0].state & FLAG::HTTP_FLAG_STREAM ){
+
+                while( self->is_available() ){
+                if   ( self->http->mode[0].size == 0 ){ break; }
+                if   ( self->http->read( self.get(),
+                       self->get_buffer().data   (), 
+                       self->get_buffer().size   (), self->http->mode[0]
+                )==1 ){ return 1; }
+                    body[0] += string_t( self->get_buffer_data(), self->http->read.data );
+                }
+
+            } else { 
+                
+                while( self->is_available() ){
+                if   ( self->http->read( self.get(), 
+                       self->get_buffer().data   (), 
+                       self->get_buffer().size   (), self->http->mode[0]
+                )==1 ){ return 1; }
+                    body[0] = string_t( self->get_buffer_data(), self->http->read.data );
+                break; }
+
             }
+                
+            if( body[0].empty() ){ rej( except_t( "no data" ) ); }
+            else /*-----------*/ { res( body[0] ); }
 
-            method  = init[0]; if( version.empty() ) version = init[2];
-            url     = string::format( "https://%s%s%s", (char*)headers["Host"], (char*)path, (char*)search );
-        } else {
-            version = init[0]; status = string::to_int(init[1]);
-        }   coNext;
+        return -1; });
 
-        do {  line = read_line(); idx = line.index_of([]( char x ){ return x==':'; });
-            if( idx < 0 ){ break; } a = line.slice( 0,idx ).to_capital_case();
-                                    b = line.slice( idx+2 ); 
-                                    headers[a] = b;
-        } while ( true ); coSet(0); return 0;
+    }); }
+    
+    /*─······································································─*/
 
-    gnStop
+    void write_header( const string_t& method, const string_t& path, const string_t& version, const header_t& headers ) const noexcept { 
+        
+        queue_t<string_t> out; set_send_mode( nullptr );
+
+        out.push( string::format( "%s %s %s" , method.get(), path.get(), version.get() ) );
+
+        auto x = headers.raw().first(); while( x!=nullptr ){ 
+        auto y = x->next; auto &z = x->data;
+               out.push( string::format( "%s: %s", z.first.to_capital_case().get(), z.second.get() ) );
+        x=y; } out.push( "\r\n" ); write( array_t<string_t>( out.data() ).join("\r\n") );
+        
+        if( method=="HEAD" ){ close(); return; } set_send_mode( headers );
+
+    }
+
+    /*─······································································─*/
+
+    void write_header( uint status, const header_t& headers ) const noexcept { 
+        
+        queue_t<string_t> out; set_send_mode( nullptr );
+
+        out.push( string::format( "%s %u %s", version.get(), status, HTTP_NODEPP::_get_http_status(status).get() ) );
+
+        auto x = headers.raw().first(); while( x!=nullptr ){ 
+        auto y = x->next; auto &z = x->data;
+               out.push( string::format( "%s: %s", z.first.to_capital_case().get(), z.second.get() ) );
+        x=y; } out.push( "\r\n" ); write( array_t<string_t>( out.data() ).join("\r\n") );
+        
+        if( method=="HEAD" ){ close(); return; } set_send_mode( headers );
+
     }
     
     /*─······································································─*/
 
-    void write_header( uint status, const header_t& headers ) noexcept {
-        if( has_header == 1 ){ return; } has_header = 1;
-        string_t res; res += string::format("%s %u %s\r\n",(char*)version,status,(char*)HTTP_NODEPP::_get_http_status(status));
-        for( auto x:headers.data() ){ res += string::format("%s: %s\r\n",(char*)x.first.to_capital_case(),(char*)x.second); }
-                                      res += "\r\n"; write( res ); if( method == "HEAD" ){ close(); }
-    }
-    
-    /*─······································································─*/
+    template< class T > void write_header( const T& fetch, const string_t& path ) const noexcept {
+        
+        queue_t<string_t> out; set_send_mode( nullptr );
 
-    void write_header( const string_t& method, const string_t& path, const string_t& version, const header_t& headers ) noexcept {
-        if( has_header == 1 ){ return; } has_header = 1; 
-        string_t res; res += string::format("%s %s %s\r\n",(char*)method,(char*)path,(char*)version);
-        for( auto x:headers.data() ){ res += string::format("%s: %s\r\n",(char*)x.first.to_capital_case(),(char*)x.second); }
-                                      res += "\r\n"; write( res );
-    }
-    
-    /*─······································································─*/
-
-    void write_filestream( const  string_t& method, const string_t& body, const file_t& file ){
-        if ( method != "POST" ){ return; }
-        if ( body.empty() && !file.is_available() ){ write("\r\n"); return; }
-        if (!body.empty() ){ write( body ); return; } while( file.is_available() ){ 
-            string_t s = file.read(); if( s.empty() ){ break; } write( s ); 
+        out.push( string::format( "%s %s %s", fetch.method.get(), path.get(), fetch.version.get() ) );
+        if( !fetch.body.empty() ){ 
+             fetch.headers["Content-Length"] = string::to_string( fetch.body.size() );
         }
+
+        auto x = fetch.headers.raw().first(); while( x!=nullptr ){ 
+        auto y = x->next; auto &z = x->data;
+               out.push( string::format( "%s: %s", z.first.to_capital_case().get(), z.second.get() ) );
+        x=y; } out.push( "\r\n" + fetch.body ); 
+
+        write( array_t<string_t>( out.data() ).join("\r\n") );
+        if( fetch.method == "HEAD" ){ close(); return; } set_send_mode( fetch.headers );
+
+    }
+    
+    /*─······································································─*/
+
+    virtual int _write( char* bf, const ulong& sx ) const noexcept override {
+        if( is_closed() ){ return -1; } if( sx==0 ){ return  0; } auto &md = http->mode[1];
+        while( http->write( this, bf, sx, md )==1 ){ return -2; }
+        return http->write.data==0 ? -1 : http->write.data;
+    }
+
+    virtual int _read ( char* bf, const ulong& sx ) const noexcept override {
+        if( is_closed() ){ return -1; } if( sx==0 ){ return  0; } auto &md = http->mode[0];
+        while( http->read( this, bf, sx, md ) ==1 ){ return -2; }
+        return http->read.data==0 ? -1 : http->read.data;
     }
 
 };}
@@ -110,42 +234,50 @@ public:
 
 namespace nodepp { namespace https {
 
-    template< class T > tls_t server( T cb, ssl_t* ctx, agent_t* opt=nullptr ){
-        return tls_t([=]( https_t cli ){ int c=0;
-            while(( c=cli.read_header() ) == 1 )
-                 { process::next(); }
-            if( c==0 ){ cb( cli ); }
-            else { cli.close(); }
-        }, ctx, opt ); 
-    }
-    
-    /*─······································································─*/
-    
-    promise_t<https_t,except_t> fetch ( const fetch_t& cfg, ssl_t* ctx, agent_t* opt=nullptr ) { 
-        if( ctx == nullptr ) process::error( "Invalid SSL Context" );
-           auto agn = type::bind( opt==nullptr?agent_t():*opt ); 
-           auto gfc = type::bind( cfg );
-           auto ssl = type::bind( ctx );
-    return promise_t<https_t,except_t>([=]( function_t<void,https_t> res, function_t<void,except_t> rej ){
-
-        if( !url::is_valid( gfc->url ) ){ rej(except_t("invalid URL")); return; }
+    inline tls_t server( function_t<void,https_t> cb, ssl_t* ssl=nullptr, agent_t* opt=nullptr ){
+    return tls_t([=]( https_t cli ){ int c =0; 
         
-        url_t    uri = url::parse( gfc->url );
-        string_t dip = uri.hostname ;
-        string_t dir = uri.pathname + uri.search + uri.hash;
-       
-        auto client = tls_t ([=]( https_t cli ){ int c = 0;
-            cli.write_header( gfc->method, dir, gfc->version, gfc->headers );
-            cli.write_filestream( gfc->method, gfc->body, gfc->file );
-            while(( c=cli.read_header() )>0 ){ process::next(); }
-            if( c==0 ){ res( cli ); return; } else { 
-                rej(except_t("Could not connect to server"));
-                cli.close(); return; 
-            }
-        }, &ssl, &agn );
+        while((c=cli.read_header())==1){ 
+        if   ( cli.is_waiting()){ process::next(); }}
+        if( c!=0 ){ cli.close(); return; } 
+        
+    cb(cli); }, ssl, opt ); }
 
-        client.onError([=]( except_t error ){ rej(error); });
-        client.connect( dip, uri.port );
+    /*─······································································─*/
+
+    inline promise_t<https_t,except_t> fetch ( const fetch_t& fetch, ssl_t* ssl=nullptr, agent_t* opt=nullptr ) {
+    auto   agent = type::bind( opt==nullptr ? agent_t() : *opt );
+    auto   cert  = type::bind( ssl  ); /*----------------------*/
+    return promise_t<https_t,except_t>([=]( res_t<https_t> res, rej_t<except_t> rej ){
+
+        if( !url::is_valid( fetch.url ) ){ rej(except_t("invalid URL")); return; }
+             url_t uri = url::parse( fetch.url );
+
+        if( !fetch.query.empty() ){ uri.search=query::format(fetch.query); }
+        string_t dip = uri.hostname ; fetch.headers["Connection"] = "close";
+        /*-------------------------*/ fetch.headers["Host"] = dip;
+        string_t dir = uri.pathname + uri.search + uri.hash;
+
+        auto skt = tls_t([=]( https_t cli ){
+
+            cli.set_timeout ( fetch.timeout ); 
+            cli.write_header( fetch, dir  );
+
+        stream::readable( cli, 0UL ).then([=]( https_t cli ){ int c=0;
+                
+            while((c=cli.read_header())==1){ 
+            if   ( cli.is_waiting()){ process::next(); }}
+
+            if( c==0 ){ res(cli); return; } cli.close();
+
+            rej(except_t("Could not connect to server"));
+
+        }).fail([=]( except_t /*unused*/ ){
+            rej(except_t("Could not connect to server"));
+        }); }, &cert, &agent );
+
+        skt.onError([=]( except_t error ){ rej(error); });
+        skt.connect( uri.rawname, uri.port );
 
     }); }
 
@@ -154,3 +286,5 @@ namespace nodepp { namespace https {
 /*────────────────────────────────────────────────────────────────────────────*/
 
 #endif
+
+/*────────────────────────────────────────────────────────────────────────────*/

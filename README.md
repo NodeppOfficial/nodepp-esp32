@@ -1,55 +1,51 @@
-# Nodepp-Arduino
+# Nodepp-ESP32
+> **The DOOM of Async Frameworks: Write Once, Build Everywhere, Process Everything.**
 
-<img src="https://github.com/NodeppOficial/nodepp-arduino/assets/109326461/3d427678-9bea-4f71-93a4-37c349a01e22" 
-     width="180px" align="left" style=" padding:10px; " >
+[![Platform](https://img.shields.io/badge/platform-Arduino%20|%20ESP32%20%-blue)](https://github.com/NodeppOfficial/nodepp-arduino)
+[![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Nodepp** is an innovative open source project that aims to make it easier to create applications in **C++**. This project introduces a high-level abstraction layer that allows developers to write **C++** code in a way that is similar to how they would write code in **NodeJS**. With **Nodepp**, developers can leverage the advantages of the **C++** language while benefiting from the ease of use and flexibility that **NodeJS** offers. This unique combination of features makes **Nodepp** a powerful tool for creating high-performance and scalable applications. Additionally, since it is an open source project, anyone can contribute and improve **Nodepp** to fit their specific needs.
+Nodepp is a groundbreaking open-source project that simplifies C++ application development by bridging the gap between the language's raw power and the developer-friendly abstractions of Node.js. By providing a high-level API, Nodepp empowers developers to write C++ code in a familiar, Node.js-inspired style.
+
+One of the standout features of Nodepp is its 100% asynchronous architecture, powered by an internal Event Loop. This design efficiently manages Nodepp’s tasks, enabling you to develop scalable and concurrent applications with minimal code. Experience the power and flexibility of Nodepp as you streamline your development process and create robust applications effortlessly!
 
 ## Features
 
-- Open source project, meaning anyone can contribute and improve it
-- Allows writing **C++** code as if writing in **NodeJS** or **Javascript**
-- Adds a high-level abstraction layer to simplify **C++** application development
-- Includes an **Event Loop** that can handle multiple events and tasks on a single thread
-- Supports **Coroutines**, which allows running multiple tasks concurrently on a single thread
+- 📌: **Node.js-like API:** Write C++ code in a syntax and structure similar to Node.js, making it easier to learn and use.
+- 📌: **Embedded-compatible:** Compatible with ESP32
+- 📌: **High-performance:** Leverage the speed and efficiency of C++ for demanding applications.
+- 📌: **Scalability:** Build applications that can handle large workloads and grow with your needs.
+- 📌: **Open-source:** Contribute to the project's development and customize it to your specific requirements.
 
-## Hello world
-```cpp
-#include <nodepp.h>
+## Batteries Included
 
-using namespace nodepp;
+- 📌: Include a **build-in JSON** parser / stringify system.
+- 📌: Include a **build-in RegExp** engine for processing text strings.
+- 📌: Include a **build-in System** that make every object **Async Task** safety.
+- 📌: Include a **Smart Pointer** base **Garbage Collector** to avoid **Memory Leaks**.
+- 📌: Include support for **Reactive Programming** based on **Events** and **Observers**.
+- 📌: Include an **Event Loop** that can handle multiple events and tasks on a single thread.
 
-void _main_() {
-    console::log("Hello World!");
-}
-```
-```
-Hello World!
-```
+## One Codebase, Every Screen
+Nodepp is the only framework that lets you share logic between the deepest embedded layers and the highest web layers.
 
-## Examples
-- Examples : [here](https://github.com/NodeppOficial/Nodepp/tree/main/examples)
+- **📌: Hardware:** [NodePP for Arduino](https://github.com/NodeppOfficial/nodepp-arduino)
+- **📌: Desktop:** [Nodepp for Desktop](https://github.com/NodeppOfficial/nodepp)
+- **📌: Browser:** [Nodepp for WASM](https://github.com/NodeppOfficial/nodepp-wasm)
+- **📌: ESP32:** [Nodepp for ESP32](https://github.com/NodeppOfficial/nodepp-esp32)
+- **📌: EPS8266:** [Nodepp for ESP8266](https://github.com/NodeppOfficial/nodepp-esp8266)
 
-## FAQ
-- reddit : [/r/Cplusplus/](https://www.reddit.com/r/Cplusplus/comments/19e2kw3/write_asynchronous_code_with_c_nodepp/) 
-- reddit : [/r/cpp/](https://www.reddit.com/r/cpp/comments/19camli/write_asynchronously_code_with_c_nodepp/)
-
-## Links
-
-- **Nodepp:** compatible with Arduino [here](https://github.com/NodeppOficial/nodepp-arduino)
-- **Nodepp:** compatible with PC      [here](https://github.com/NodeppOficial/Nodepp)
-- **Nodepp:** compatible with ESPxxxx [here](https://github.com/NodeppOficial/Nodepp)
-  
 ## Contribution
 
 If you want to contribute to **Nodepp**, you are welcome to do so! You can contribute in several ways:
 
-- Improving the documentation
-- Reporting bugs and issues
-- Adding new features or improving existing ones
-- Writing tests and ensuring compatibility with different platforms
-- Before submitting a pull request, make sure to read the contribution guidelines.
+- ☕ Buying me a Coffee
+- 📢 Reporting bugs and issues
+- 📝 Improving the documentation
+- 📌 Adding new features or improving existing ones
+- 🧪 Writing tests and ensuring compatibility with different platforms
+- 🔍 Before submitting a pull request, make sure to read the contribution guidelines.
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/edbc_repo)
 
 ## License
-
-**Nodepp** is distributed under the MIT License. See the LICENSE file for more details.
+**Nodepp-Embedded** is distributed under the MIT License. See the LICENSE file for more details.
