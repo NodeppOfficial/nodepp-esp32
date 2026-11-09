@@ -1,59 +1,55 @@
+/*
+ * Copyright 2023 The Nodepp Project Authors. All Rights Reserved.
+ *
+ * Licensed under the MIT (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+ * https://github.com/NodeppOfficial/nodepp/blob/main/LICENSE
+ */
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
 #ifndef NODEPP_EXPECTED
 #define NODEPP_EXPECTED
 
+/*────────────────────────────────────────────────────────────────────────────*/
+
 namespace nodepp {
 template <typename T, typename E> struct expected_t { 
-protected:
+protected: 
 
-    bool hasValue; union {
-       T data; E err;
-    };
-
+    pair_t<ptr_t<T>,ptr_t<E>> val; 
+    
 public:
 
-    expected_t( const T& val ) : hasValue(true) , data(val) {}
+    expected_t( const T& value ) noexcept { val.first =type::bind( value ); }
 
-    expected_t( const E& err ) : hasValue(false), err(err) {}
+    expected_t( const E& error ) noexcept { val.second=type::bind( error ); }
 
-    /*─······································································─*/
-
-    bool has_value() const { return hasValue; }
+    expected_t( null_t ) /*---*/ noexcept {}
 
     /*─······································································─*/
 
-    T& value() {
-        if ( !hasValue ) {
-            process::error("expected does not have a value");
-        }   return data;
-    }
+    explicit operator bool(void) const noexcept { return !val.first.null(); }
 
-    const T& value() const {
-        if ( !hasValue ) {
-            process::error("expected does not have a value");
-        }   return data;
-    }
+    bool has_value() /*-------*/ const noexcept { return !val.first.null(); }
 
     /*─······································································─*/
 
-    E& error() {
-        if ( hasValue ) {
-            process::error("expected does not have an error");
-        }   return err;
-    }
-
-    const E& error() const {
-        if ( hasValue ) {
-            process::error("expected does not have an error");
-        }   return err;
-    }
+    T value() const { if( val.first.null() ){ 
+        NODEPP_THROW_ERROR("expected does not have a value"); 
+    } return *val.first; }
 
     /*─······································································─*/
 
-    virtual ~expected_t() {
-        if( hasValue ){ data.~T(); } 
-        else          { err .~E(); }
-    }
+    E error() const { if( val.second.null() ){ 
+        NODEPP_THROW_ERROR("expected does not have an error"); 
+    } return *val.second; }
 
 };}
 
+/*────────────────────────────────────────────────────────────────────────────*/
+
 #endif
+
+/*────────────────────────────────────────────────────────────────────────────*/

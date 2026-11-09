@@ -1,54 +1,106 @@
+/*
+ * Copyright 2023 The Nodepp Project Authors. All Rights Reserved.
+ *
+ * Licensed under the MIT (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+ * https://github.com/NodeppOfficial/nodepp/blob/main/LICENSE
+ */
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
 #ifndef NODEPP_ENCODER
 #define NODEPP_ENCODER
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-#include "string.h"
+#define NODEPP_BASE8  "0123456789abcdef"
+#define NODEPP_BASE58 "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+#define NODEPP_BASE64 "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace nodepp { namespace encoder {
-    
-    ulong hash( const string_t& key, int tableSize ) {
-        ulong hash = 5381; for ( auto c : key ) {
-            hash = ((hash << 5) + hash) + c;
-        }   return hash % tableSize;
-    }
-    
-    /*─······································································─*/
+#include "string.h"
+#include "utf.h"
 
-    ulong hash() { int x = sizeof(ulong) * 8; 
-            ulong  data = 0; while( x --> 0 ){
-            data = data << 1 | ( data | rand() % 2 );
-        }   return data;
-    }
-    
-    /*─······································································─*/
+/*────────────────────────────────────────────────────────────────────────────*/
 
-    ulong hash( int key, int tableSize ) {
-        return key % tableSize;
+namespace nodepp { namespace encoder { namespace random {
+
+    inline uchar_64 generate( uchar_64 seed ) {
+        seed ^= seed << 0x11;
+        seed ^= seed >> 0x07;
+        seed ^= seed << 0x0b; return seed;
     }
 
-}}
+}}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace nodepp { namespace encoder { namespace key {
+
+    inline string_t generate( const string_t& alph, int x=32 ){
+    thread_local static uchar_64 y = (uchar_64) &NODEPP_SHTDWN();
+        string_t data( (ulong)x, '\0' ); for( auto &x: data ){
+             y=random::generate(y); x=alph[y%alph.size()]; 
+        } return data;
+    }
+
+    inline string_t generate( int x=32 ) { return generate( NODEPP_BASE64, x ); }
+
+}}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace nodepp { namespace encoder { namespace hash {
+
+    inline uchar_64 get( const string_t& key, int tableSize ) {
+        uchar_64 hash = 0x1505; forEach( x, key ){
+                 hash = ((hash << 5) + hash) + x;
+        } return hash % tableSize;
+    }
+
+    inline uchar_64 get( uchar_64 key, int tableSize ){ return key % tableSize; }
+
+    inline uchar_64 get( const string_t& key ){ return get( key, NODEPP_HASH_TABLE_SIZE ); }
+
+}}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace nodepp { namespace encoder { namespace XOR {
+
+    inline string_t atob( const string_t& data, const string_t& key ){
+        auto tmp = data.copy(); ulong pos= 0; forEach( x, tmp ) {
+            x = x^ key[pos]; ++pos; pos %= key.size();
+        }   return tmp;
+    }
+
+    inline string_t btoa( const string_t& data, const string_t& key ){ 
+        return atob( data, key ); 
+    }
+
+}}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace nodepp { namespace encoder { namespace bytes {
 
     template< class T >
-    ptr_t<uchar> get( T num ){
-        ptr_t<uchar> res ( sizeof(num), 0 );
-        for( ulong y=0; y<res.size(); y++ ){
-            res[y] = num >> ( 8*(res.size()-y-1) ); 
-        }   return res;
-    }
+    ptr_t<uchar> atob( T num ){ ptr_t<uchar> out( sizeof( num ), 0 );
+     auto tmp = typename type::make_unsigned<T>::type( num );
+        for( ulong y=0; y<out.size(); ++y ){
+             out[y] = tmp >> ( 8*(out.size()-y-1) );
+        }
+    return out; }
 
     template< class T >
-    T set( const ptr_t<uchar>& num ){ T res;
-        for( ulong y=0; y<num.size(); y++ ){
-            res = res << 8 | num[y];
-        }   return res;
-    }
+    T btoa( const ptr_t<uchar>& num ){
+    auto out = typename type::make_unsigned<T>::type( 0x00 );
+        for( ulong y=0; y<num.size(); ++y ){
+             out = ( out << 8 ) | num[y];
+        }    
+    return out; }
 
 }}}
 
@@ -57,19 +109,42 @@ namespace nodepp { namespace encoder { namespace bytes {
 namespace nodepp { namespace encoder { namespace bin {
 
     template< class T >
-    ptr_t<bool> get( T num ){
-        ptr_t<bool> res ( sizeof(num) * 8, 0 );
-        for ( auto x =sizeof(num)*8; x--; ){
-              res[x] = num & 1 ; num >>= 1;
-        }     return res;
+    ptr_t<bool> atob( T num ){ ptr_t<bool> out ( sizeof ( num ) * 8, 0 );
+    auto tmp = typename type::make_unsigned<T>::type( num );
+        for( auto x= out.size(); x-- >0; ){
+             out[x]= tmp & 0x01; tmp >>= 1;
+        }    return out;
     }
 
     template< class T >
-    T set( const ptr_t<bool>& num ){ T res = 0;
-         if ( num.empty() ){ return res; }
-        for ( auto x : num ){
-              res = res << 1 | ( x & 1 );
-        }     return res;
+    T btoa( const ptr_t<bool>& num ){ 
+    auto out = typename type::make_unsigned<T>::type( 0x00 );
+        if ( num.empty () ){ return out; }
+        for( auto& x: num ){ out = ( out << 0x01 ) | ( x & 0x01 ); }
+    return out; }
+
+}}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace nodepp { namespace encoder { namespace hex {
+
+    template< class T, class = typename type::enable_if<type::is_integral<T>::value,T>::type >
+    string_t atob( T num ){ auto tmp = typename type::make_unsigned<T>::type( num );
+    string_t out ; do {
+         out.unshift( NODEPP_BASE8[ tmp & 0x0F ] ); tmp >>= 4;
+    } while( tmp != 0 ); if( out.size() % 2 != 0 ){
+         out.unshift( '0' );
+    } return out; }
+
+    template< class T, class = typename type::enable_if<type::is_integral<T>::value,T>::type >
+    T btoa( const string_t& num ){ if ( num.empty() ){ return 0; }
+        auto out = typename type::make_unsigned<T>::type (0x00);
+        for ( auto c: num ){ out  = out << 4;
+        if  ( c >= '0' && c <= '9' ){ out |= c - '0'     ; }
+        elif( c >= 'a' && c <= 'f' ){ out |= c - 'a' + 10; }
+        elif( c >= 'A' && c <= 'F' ){ out |= c - 'A' + 10; }
+        else{ return 0; }} return out;
     }
 
 }}}
@@ -77,35 +152,19 @@ namespace nodepp { namespace encoder { namespace bin {
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace nodepp { namespace encoder { namespace hex {
-    
-    string_t get( const ptr_t<uchar>& inp ){
-        if ( inp.empty() ){ return nullptr; }
-        string_t out; for( auto x : inp ){
-            out += string::format( "%02x", x );
-        }   return out;
+
+    inline string_t atob( const ptr_t<uchar>& inp ){
+        if ( inp.empty() ) { return nullptr; }
+        queue_t<char> out; for( auto x : inp ){
+            for( auto y: atob(x) ){ out.push( y ); }
+        }   out.push('\0'); return string_t( out.data() );
     }
 
-    ptr_t<uchar> set( string_t x ){
+    inline ptr_t<uchar> btoa( string_t x ){
         if ( x.empty() ){ return nullptr; }
-        ulong size = x.size() / 2 + ( x.size()%2 ? 0 : 1 ); 
-        ptr_t<uchar> out ( size ); for ( auto &y : out ){
-            string::parse( x.splice(0,2), "%02x", &y );
-        }   return out;
-    }
-
-    template< class T, class = typename type::enable_if<type::is_integral<T>::value,T>::type >
-    string_t get( T num ){ ptr_t<char> out ( sizeof(num), 0 );
-        int x = sprintf( &out, "%x", num ); 
-        return { &out, (ulong)x };
-    }
-
-    template< class T, class = typename type::enable_if<type::is_integral<T>::value,T>::type >
-    T set( string_t num ){ if ( num.empty() ){ return 0; } 
-        T out = 0; for ( auto c: num ){    out  = out << 4;
-              if ( c >= '0' && c <= '9' ){ out |= c - '0'     ; } 
-            elif ( c >= 'a' && c <= 'f' ){ out |= c - 'a' + 10; } 
-            elif ( c >= 'A' && c <= 'F' ){ out |= c - 'A' + 10; } 
-            else { return 0; }
+        ulong size = x.size()/2 + ( x.size()%2 != 0?1:0 );
+        ptr_t<uchar> out(size,'\0'); for( auto &y : out ){
+            y = btoa<uchar>( x.splice(0,2) );
         }   return out;
     }
 
@@ -113,95 +172,21 @@ namespace nodepp { namespace encoder { namespace hex {
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace nodepp { namespace encoder { namespace utf8 {
+namespace nodepp { namespace encoder { namespace base16 {
 
-    ptr_t<char16_t> to_utf16( string_t inp ){ 
+    inline string_t btoa( const string_t& inp ){
         if( inp.empty() ){ return nullptr; }
-        ptr_t<char16_t> res ( inp.size(), 0 ); 
-        for ( ulong x=0; x<inp.size(); x++ ){ 
-            res[x] = type::cast<char16_t>( inp[x] );
-        }   return res;
+        ptr_t<uchar> buff = hex::btoa(inp);
+        string_t raw ( buff.size() + 1 );
+        memcpy( raw.get(), &buff, buff.size() );
+        return raw;
     }
 
-    ptr_t<char32_t> to_utf32( string_t inp ){
+    inline string_t atob( const string_t& inp ){
         if( inp.empty() ){ return nullptr; }
-        ptr_t<char32_t> res ( inp.size(), 0 ); 
-        for ( ulong x=0; x<inp.size(); x++ ){ 
-            res[x] = type::cast<char16_t>( inp[x] );
-        }   return res;
-    }
-
-}}}
-
-/*────────────────────────────────────────────────────────────────────────────*/
-
-namespace nodepp { namespace encoder { namespace utf16 {
-
-    string_t to_utf8( ptr_t<char16_t> inp ){ 
-        if ( inp.empty() ){ return nullptr; } string_t res;
-        for( ulong x=0; inp[x] != 0; ++x ){ char16_t ch = inp[x];
-        if ( ch <= 0x7F ) {
-            res.push(type::cast<char>(ch));
-        } elif ( ch <= 0x7FF ) {
-            res.push(type::cast<char>(0xC0|( ch >> 6)));
-            res.push(type::cast<char>(0x80|( ch & 0x3F)));
-        } else {
-            res.push(type::cast<char>(0xE0|( ch >> 12)));
-            res.push(type::cast<char>(0x80|((ch >> 6) & 0x3F)));
-            res.push(type::cast<char>(0x80|( ch & 0x3F)));
-        }
-        }   return res;
-    }
-
-    ptr_t<char32_t> to_utf32( ptr_t<char16_t> inp ){
-        if( inp.empty() ){ return nullptr; }
-        ptr_t<char32_t> res ( inp.size(), 0 ); 
-        for ( ulong x=0; x<inp.size(); x++ ){ 
-            res[x] = type::cast<char32_t>( inp[x] );
-        }   return res;
-    }
-
-}}}
-
-/*────────────────────────────────────────────────────────────────────────────*/
-
-namespace nodepp { namespace encoder { namespace utf32 {
-
-    string_t to_utf8( ptr_t<char32_t> inp ){ 
-        if ( inp.empty() ){ return nullptr; } string_t res;
-        for( ulong x=0; inp[x] != 0; ++x ){ char32_t ch = inp[x];
-        if ( ch <= 0x7F ) {
-            res.push(type::cast<char>(ch));
-        } elif ( ch <= 0x7FF ) {
-            res.push(type::cast<char>(( ch >> 6)   | 0xC0));
-            res.push(type::cast<char>(( ch & 0x3F) | 0x80));
-        } elif( ch <= 0xFFFF ) {
-            res.push(type::cast<char>(( ch >>  12) | 0xE0));
-            res.push(type::cast<char>(((ch >>   6) & 0x3F) | 0x80));
-            res.push(type::cast<char>(((ch & 0x3F) | 0x80)));
-        } else {
-            res.push(type::cast<char>(( ch >>  18) | 0xF0));
-            res.push(type::cast<char>(((ch >>  12) & 0x3F) | 0x80));
-            res.push(type::cast<char>(((ch >>   6) & 0x3F) | 0x80));
-            res.push(type::cast<char>(( ch & 0x3F) | 0x80));       
-        }
-        }   return res;
-    }
-
-    ptr_t<char16_t> to_utf16( ptr_t<char32_t> inp ){
-        ptr_t<char16_t> res = ptr_t<char16_t>( (inp.size()+1) * sizeof(char16_t), 0 );
-
-        ulong x = 0; while( inp[x] != 0 ) {
-            if( inp[x] < 0x10000 ) {
-                res[x] = type::cast<char16_t>( inp[x] );
-            } else {
-                inp[x]-= 0x10000;
-                res[x] = type::cast<char16_t>(0xD800 + (inp[x] >> 10)); x++;
-                res[x] = type::cast<char16_t>(0xDC00 + (inp[x] & 0x3FF));
-            }   x++;
-        }
-
-        res[x] = 0; return res;
+        auto raw = ptr_t<uchar>( inp.size() );
+        memcpy( &raw, inp.get(), inp.size() );
+        return hex::atob( raw );
     }
 
 }}}
@@ -210,43 +195,218 @@ namespace nodepp { namespace encoder { namespace utf32 {
 
 namespace nodepp { namespace encoder { namespace base64 {
 
-    const string_t base64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    inline string_t atob( const string_t &inp ) {
 
-    string_t get( const string_t &in ) {
+        queue_t<char> out; int pos1 = 0, pos2 = -6;
 
-        string_t out; int val = 0, valb = -6;
+        for  ( uchar c: inp ) {
+               pos1= ( pos1 << 8 ) + c; pos2 += 8;
+        while( pos2 >= 0 ) {
+               out.push(NODEPP_BASE64[(pos1>>pos2)&0x3F]);
+               pos2 -= 6;
+        }}
 
-        for ( uchar c: in ) {
-            val = ( val  << 8 ) + c; valb += 8;
-            while ( valb >= 0 ) {
-                out.push(base64[(val>>valb)&0x3F]);
-                valb -= 6;
-            }
-        }
-
-        if (valb>-6) out.push(base64[((val<<8)>>(valb+8))&0x3F]);
-        while (out.size()%4){ out.push('='); } return out;
+        if( pos2>-6 ){ out.push(NODEPP_BASE64[((pos1<<8)>>(pos2+8))&0x3F]); }
+        while( out.size()%4 ){ out.push('='); } out.push('\0'); 
+        
+        return string_t( out.data() );
     }
 
-    string_t set( const string_t &in ) {
+    inline string_t btoa( const string_t &in ) {
 
-        string_t out; int val=0, valb=-8;
-        array_t<int> T( 256, -1 );
+        queue_t<char> out; int pos1=0, pos2=-8; 
+        int T[256]; type::fill( T, T+256, -1 );
 
-        for ( int i=0; i<64; i++ ) T[base64[i]] = i;
-        for ( uchar c: in ) { if ( T[c]==-1 ) break;
-            val = ( val << 6 ) + T[c]; valb += 6;
-            if (valb >= 0) {
-                out.push(char((val>>valb)&0xFF));
-                valb -= 8;
-            }
+        for( int i=0; i<64; ++i ){ T[NODEPP_BASE64[i]]=i; }
+        for( uchar c: in ) { if ( T[c]==-1 ){ break; }
+             pos1 = ( pos1 << 6 )+T[c] ; pos2 += 6;
+        if ( pos2 >= 0 ) {
+             out.push(char((pos1>>pos2)&0xFF));
+             pos2 -= 8;
+        }}
+
+        out.push('\0'); return string_t( out.data() );
+    }
+
+}}}
+
+namespace nodepp { namespace encoder { namespace base58 {
+
+    inline string_t atob( string_t message ){
+        
+        if( message.empty() ){ return nullptr; } 
+        
+        ptr_t  <uchar> nmb( message.size() );
+        queue_t<char>  out, zrs;
+
+        memcpy( nmb.get(), message.get(), nmb.size() );
+        for( auto &x: nmb ){ if( x != 0x00 ){ break; }
+            zrs.push('1'); nmb.slice( 1, nmb.size() );
         }
+        
+        while( !nmb.empty() ){ 
+            
+            uchar_32 borrow = 0;
 
-        return out;
+            for( auto &x: nmb ){
+                uchar_32 current = ( borrow<<8 ) | x;
+                x      = current / 58;
+                borrow = current % 58;
+            }
+
+            while(!nmb.empty() && nmb[0]==0x00 )
+                 { nmb.slice( 1, nmb.size() ); }
+            out.unshift( NODEPP_BASE58[borrow] );
+
+        }
+        
+        out.insert( out.first(), zrs.data() ); 
+        out.push  ( '\0' ); return out.data();
+
+    }
+
+    inline string_t btoa( string_t message ){
+
+        if ( message.empty() ){ return nullptr; } 
+        int T[256]; type::fill( T, T+256, -1 );
+        for( int i=0; i<58; i++ ){ T[ (uchar) NODEPP_BASE58[i] ] = i; }
+        
+        array_t<uchar> nmb;
+        queue_t<char>  out, zrs;
+
+        for( auto &x: nmb ){ if( x != NODEPP_BASE58[0] ){ break; }
+            zrs.push( 0x00 ); nmb.shift();
+        }
+        
+        for( ulong x=zrs.size(); x<message.size(); x++ ){
+        if ( T[message[x]] < 0 ){ continue; } 
+
+            uchar_32 borrow = T[message[x]];
+
+            for( auto &x: nmb ){
+                 uchar_32 current = ( x * 58 ) + borrow;
+                 x      = current & 0xFF;
+                 borrow = current >> 8;
+            }
+
+            while( borrow > 0 ){ nmb.push( borrow & 0xFF ); borrow >>= 8; }
+
+        }
+        
+        out.insert( nullptr , nmb.reverse().ptr() ); 
+        out.insert( out.first(), zrs.data() );
+        out.push  ( '\0' ); return out.data();
     }
 
 }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
+namespace nodepp { namespace encoder { namespace endian {
+
+    inline bool is_little_endian(){
+        uchar_16 value = 0x01;
+        return ( (char*)&value )[0] == 0x01;
+    }
+
+    inline bool is_big_endian(){
+        uchar_16 value = 0x01;
+        return ( (char*)&value )[0] == 0x00;
+    }
+
+    template < class T >
+    typename type::enable_if< type::is_number<T>::value, T >::type
+    flip( T value ){
+
+        ulong idx = sizeof(T) >> 1; 
+        ulong pre = sizeof(T) >> 1;
+        char* mem = (char*) &value;
+
+        while( idx>0 ){ 
+        idx--; type::swap( mem[idx], mem[pre] ); 
+        pre++; } 
+        
+        return value; 
+    }
+
+    template< class T >
+    typename type::enable_if< type::is_number<T>::value, T >::type
+    to_big_endian( const T& value ){
+    return is_big_endian() ? value : flip(value); }
+
+    template< class T >
+    typename type::enable_if< type::is_number<T>::value, T >::type
+    to_little_endian( const T& value ){
+    return is_little_endian() ? value : flip(value); }
+
+}}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace nodepp { namespace encoder { namespace pac { 
+
+    inline uchar_64 atob( uchar_64 address, uchar_64 mask ){
+
+        uchar_64 pre = ( (uchar_64) &NODEPP_SHTDWN() );
+
+        uchar_64 msk = ( pre  ^ endian::flip(pre ) );
+        uchar_64 slt = ( mask ^ endian::flip(mask) );
+        uchar_64 ovf = ( (uchar_64)-1 )>>16;
+
+        uchar_64 raw = ( address ^ msk ) & ovf;
+        uchar_64 col = ( address ^ slt ) & ovf;
+
+        uchar_64 sum = ( col^(col>>16)^(col>>32)^(col>>48) ) & 0xffff;
+        return raw | ( sum << 48 );
+
+    }
+
+    inline uchar_64 btoa( uchar_64 address, uchar_64 mask ){
+
+        uchar_64 pre = ( (uchar_64) &NODEPP_SHTDWN() );
+
+        uchar_64 msk = ( pre  ^ endian::flip(pre ) );
+        uchar_64 slt = ( mask ^ endian::flip(mask) );
+        uchar_64 ovf = ( (uchar_64)-1 )>>16;
+
+        uchar_64 raw = ( address ^ msk ) & ovf;
+        uchar_64 col = ( raw     ^ slt ) & ovf;
+
+        uchar_64 sum = ( col^(col>>16)^(col>>32)^(col>>48) ) & 0xffff;
+        uchar_64 out = ( address >>48) /*-----------------*/ & 0xffff;
+
+        return out==sum ? raw : 0ULL; 
+
+    }
+
+}}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace nodepp { namespace encoder { namespace utf8 {
+    inline ptr_t<uchar_16> to_utf16( const ptr_t<uchar_8>& inp ){ return utf::utf8_to_utf16( inp ); }
+    inline ptr_t<uchar_32> to_utf32( const ptr_t<uchar_8>& inp ){ return utf::utf8_to_utf32( inp ); }
+}}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace nodepp { namespace encoder { namespace utf16 {
+    inline ptr_t<uchar_8>  to_utf8 ( const ptr_t<uchar_16>& inp ){ return utf::utf16_to_utf8 ( inp ); }
+    inline ptr_t<uchar_32> to_utf32( const ptr_t<uchar_16>& inp ){ return utf::utf16_to_utf32( inp ); }
+}}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace nodepp { namespace encoder { namespace utf32 {
+    inline ptr_t<uchar_8>  to_utf8 ( const ptr_t<uchar_32>& inp ){ return utf::utf32_to_utf8 ( inp ); }
+    inline ptr_t<uchar_16> to_utf16( const ptr_t<uchar_32>& inp ){ return utf::utf32_to_utf16( inp ); }
+}}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+#undef NODEPP_BASE58
+#undef NODEPP_BASE64
+#undef NODEPP_BASE8
 #endif
+
+/*────────────────────────────────────────────────────────────────────────────*/

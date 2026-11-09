@@ -1,55 +1,49 @@
-# Nodepp-Arduino
+# Nodepp-ESP32: An Asynchronous Runtime for C++ ( ESP32 )
 
-<img src="https://github.com/NodeppOficial/nodepp-arduino/assets/109326461/3d427678-9bea-4f71-93a4-37c349a01e22" 
-     width="180px" align="left" style=" padding:10px; " >
+[![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Platform](https://img.shields.io/badge/platform-ESP32-blue)](https://github.com/NodeppOfficial/nodepp)
+[![Valgrind Memory Test](https://img.shields.io/badge/memory-zero_leaks-green)](https://github.com/NodeppOfficial/nodepp/blob/main/benchmark/valgrind_benchmark/readme.md)
 
-**Nodepp** is an innovative open source project that aims to make it easier to create applications in **C++**. This project introduces a high-level abstraction layer that allows developers to write **C++** code in a way that is similar to how they would write code in **NodeJS**. With **Nodepp**, developers can leverage the advantages of the **C++** language while benefiting from the ease of use and flexibility that **NodeJS** offers. This unique combination of features makes **Nodepp** a powerful tool for creating high-performance and scalable applications. Additionally, since it is an open source project, anyone can contribute and improve **Nodepp** to fit their specific needs.
+> Port Under Construction
 
-## Features
+Nodepp is an asynchronous C++ runtime that unifies application development under a single syntax, a single codebase, and a single execution model. It starts from a simple premise: you don't need a different language for every layer of your application. The same code that runs on a Linux server can run in a browser via WASM, on an ESP32, or on an Arduino Nano — without changes.
 
-- Open source project, meaning anyone can contribute and improve it
-- Allows writing **C++** code as if writing in **NodeJS** or **Javascript**
-- Adds a high-level abstraction layer to simplify **C++** application development
-- Includes an **Event Loop** that can handle multiple events and tasks on a single thread
-- Supports **Coroutines**, which allows running multiple tasks concurrently on a single thread
+The inspiration doesn't come from a modern framework, but from Doom. Doom wasn't revolutionary for its graphics, but for its portability: it ran on hardware nobody imagined because its design didn't depend on a specific platform. That same philosophy guided Nodepp — a runtime so universal it runs on anything with a C++11 compiler, from 2KB of RAM to 64 cores. It's not a framework tied to an ecosystem. It's a runtime that adapts to the hardware, not the other way around.
 
-## Hello world
+Most runtimes grow until they can't be understood. Nodepp went the other direction. ~3,800 lines for the entire core. 2KB for the binary. 0% CPU when idle. No STL, no exceptions, no RTTI — not because they're bad, but because they aren't necessary. The result is a runtime small enough to fit on any controller and simple enough to audit completely. Nothing to trust. Nothing to hide.
+
+## Featured Projects
+
+**[Enigma Machine - Arduino Nano](https://wokwi.com/projects/449104127751150593)**  
+A fully functional Enigma machine running on 2KB of RAM.
+
+https://github.com/user-attachments/assets/9b870671-3854-444f-893d-40fdce31a629
+
+**[Spacesus.io](https://spacesus.io)**  
+P2P multiplayer game built on Nodepp, WebRTC, and Ungine.
+https://github.com/user-attachments/assets/a8b4d56d-0291-4aa8-98e6-926116215f8f
+
+## Quick Start
+
 ```cpp
-#include <nodepp.h>
+#include <nodepp/nodepp.h>
 
 using namespace nodepp;
 
-void _main_() {
-    console::log("Hello World!");
+void onMain(){ 
+
+    pinMode( 13, INPUT );
+
+    process::add( coroutine::add( COROUTINE(){
+    coBegin while( true ){
+
+        digitalWrite( 13, HIGH ); coDelay(1000);
+        digitalWrite( 13, LOW  ); coDelay(1000);
+
+    } coFinish }));
+    
 }
 ```
-```
-Hello World!
-```
-
-## Examples
-- Examples : [here](https://github.com/NodeppOficial/Nodepp/tree/main/examples)
-
-## FAQ
-- reddit : [/r/Cplusplus/](https://www.reddit.com/r/Cplusplus/comments/19e2kw3/write_asynchronous_code_with_c_nodepp/) 
-- reddit : [/r/cpp/](https://www.reddit.com/r/cpp/comments/19camli/write_asynchronously_code_with_c_nodepp/)
-
-## Links
-
-- **Nodepp:** compatible with Arduino [here](https://github.com/NodeppOficial/nodepp-arduino)
-- **Nodepp:** compatible with PC      [here](https://github.com/NodeppOficial/Nodepp)
-- **Nodepp:** compatible with ESPxxxx [here](https://github.com/NodeppOficial/Nodepp)
-  
-## Contribution
-
-If you want to contribute to **Nodepp**, you are welcome to do so! You can contribute in several ways:
-
-- Improving the documentation
-- Reporting bugs and issues
-- Adding new features or improving existing ones
-- Writing tests and ensuring compatibility with different platforms
-- Before submitting a pull request, make sure to read the contribution guidelines.
 
 ## License
-
-**Nodepp** is distributed under the MIT License. See the LICENSE file for more details.
+MIT. Use it anywhere.
